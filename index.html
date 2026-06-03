@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>文明历代奇观档案馆 | Civilization Wonders Explorer</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- OrbitControls -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #050510; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        #canvas-container { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1; }
+        
+        /* 玻璃拟态 UI 样式 */
+        .glass-panel { background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(255, 215, 0, 0.2); box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5); }
+        
+        /* 自定义滚动条 */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.2); }
+        ::-webkit-scrollbar-thumb { background: rgba(218, 165, 32, 0.5); border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(218, 165, 32, 0.8); }
+
+        .civ-gold { color: #facc15; }
+        .civ-green { color: #4ade80; }
+        .civ-border { border-color: rgba(250, 204, 21, 0.4); }
+        .civ-hover:hover { background: rgba(250, 204, 21, 0.15); border-color: rgba(250, 204, 21, 0.8); }
+
+        .slide-in { animation: slideIn 0.4s ease-out forwards; }
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+    </style>
+</head>
+<body class="text-gray-200">
+
+    <!-- 3D 场景容器 -->
+    <div id="canvas-container"></div>
+
+    <!-- UI 层 -->
+    <div class="relative z-10 flex h-screen pointer-events-none">
+        
+        <!-- 左侧：奇观列表 -->
+        <div class="w-80 h-full flex flex-col p-4 pointer-events-auto">
+            <div class="glass-panel rounded-xl flex-1 flex flex-col overflow-hidden">
+                <div class="p-4 border-b civ-border bg-slate-900/50">
+                    <h1 class="text-2xl font-bold civ-gold tracking-wider text-center">历代奇观图鉴</h1>
+                    <p class="text-[10px] text-center text-gray-400 mt-1 uppercase tracking-widest">Civilization V / VI / VII</p>
+                </div>
+                <div id="wonder-list" class="flex-1 overflow-y-auto p-2 space-y-2">
+                    <!-- 列表项由 JS 动态生成 -->
+                </div>
+            </div>
+        </div>
+
+        <!-- 中间空白 -->
+        <div class="flex-1"></div>
+
+        <!-- 右侧：详情对比面板 -->
+        <div id="detail-panel" class="w-[500px] h-full p-4 pointer-events-auto hidden">
+            <div class="glass-panel rounded-xl h-full flex flex-col overflow-hidden relative slide-in">
+                <!-- 关闭按钮 -->
+                <button onclick="closeDetailPanel()" class="absolute top-4 right-4 text-gray-400 hover:text-white z-20">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+
+                <div class="p-6 border-b civ-border bg-slate-900/80">
+                    <div class="flex items-center space-x-2 mb-2">
+                        <div class="text-sm font-bold" id="detail-type-era">类别 · 时代</div>
+                        <div id="detail-games" class="flex"></div>
+                    </div>
+                    <h2 class="text-3xl font-bold text-white mb-2" id="detail-name">奇观名称</h2>
+                    <p class="text-sm text-gray-400 flex items-center">
+                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                        <span id="detail-coords">坐标</span>
+                    </p>
+                </div>
+
+                <div class="flex-1 overflow-y-auto">
+                    <!-- 图片对比区 -->
+                    <div class="p-4 grid grid-cols-2 gap-4 border-b border-gray-700/50">
+                        <div class="flex flex-col">
+                            <span class="text-xs text-center mb-2 text-gray-400 tracking-widest">真实面貌</span>
+                            <img id="real-img" src="" alt="Real World" class="rounded-lg object-cover h-32 w-full shadow-lg border border-gray-600 bg-slate-800">
+                        </div>
+                        <div class="flex flex-col">
+                            <span class="text-xs text-center mb-2 civ-gold tracking-widest" id="game-img-label">游戏设定</span>
+                            <img id="game-img" src="" alt="Game Model" class="rounded-lg object-cover h-32 w-full shadow-lg border civ-border bg-slate-800">
+                        </div>
+                    </div>
+
+                    <!-- 文本解析区 -->
+                    <div class="p-6 space-y-6">
+                        <div>
+                            <h3 class="text-lg font-semibold text-white mb-2 flex items-center">
+                                <span class="w-1.5 h-4 bg-blue-500 rounded-full mr-2"></span> 历史与现实
+                            </h3>
+                            <p class="text-sm text-gray-300 leading-relaxed" id="detail-real-desc"></p>
+                        </div>
+                        
+                        <div>
+                            <h3 class="text-lg font-semibold civ-gold mb-2 flex items-center" id="game-desc-title">
+                                <span class="w-1.5 h-4 bg-yellow-500 rounded-full mr-2"></span> 游戏机制解析
+                            </h3>
+                            <div class="bg-black/30 rounded-lg p-3 border border-yellow-900/30">
+                                <p class="text-sm text-gray-200 leading-relaxed" id="detail-game-desc"></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- 超级数据集：文明 5, 6, 7 人造奇观与自然奇观大合集 ---
+        const wondersData = [
+            // === 共享/多世代 人造奇观 ===
+            { type: 'world', id: 'pyramids', name: '大金字塔', era: '远古时代', games: [5, 6, 7], lat: 29.979, lon: 31.134, wiki: 'Great_Pyramid_of_Giza', gamePic: 'Pyramids_(Civ6).png', realDesc: '埃及吉萨的法老陵墓，古代世界七大奇迹中唯一尚存的建筑。', gameDesc: '【历代核心】极大加速建造者/工人的效率及使用次数，是全系列最强的前期基建奇观之一。' },
+            { type: 'world', id: 'stonehenge', name: '巨石阵', era: '远古时代', games: [5, 6, 7], lat: 51.178, lon: -1.826, wiki: 'Stonehenge', gamePic: 'Stonehenge_(Civ6).png', realDesc: '英国的史前巨石遗迹，其排列与天文观测息息相关。', gameDesc: '【历代核心】提供早期的高额信仰值，往往能直接免费获得大先知并创立宗教。' },
+            { type: 'world', id: 'colosseum', name: '罗马斗兽场', era: '古典时代', games: [5, 6, 7], lat: 41.890, lon: 12.492, wiki: 'Colosseum', gamePic: 'Colosseum_(Civ6).png', realDesc: '古罗马帝国标志性的巨型角斗场。', gameDesc: '【历代核心】极大提升周围城市的快乐度/宜居度以及文化产出，是中期维稳的神器。' },
+            { type: 'world', id: 'oracle', name: '神谕', era: '远古时代', games: [5, 6, 7], lat: 38.482, lon: 22.501, wiki: 'Delphi', gamePic: 'Oracle_(Civ6).png', realDesc: '希腊德尔斐的阿波罗神庙，预言降临之地。', gameDesc: '【历代核心】在历代中通常会提供免费科技，或是极大降低伟人的购买/赞助成本。' },
+            { type: 'world', id: 'eiffel_tower', name: '埃菲尔铁塔', era: '工业时代', games: [5, 6, 7], lat: 48.858, lon: 2.294, wiki: 'Eiffel_Tower', gamePic: 'Eiffel_Tower_(Civ6).png', realDesc: '法国巴黎的世界博览会标志铁塔。', gameDesc: '【历代核心】为全文明提供巨额的魅力值/快乐度，是文化胜利后期的核心支柱。' },
+            { type: 'world', id: 'statue_of_liberty', name: '自由女神像', era: '工业时代', games: [5, 6, 7], lat: 40.689, lon: -74.044, wiki: 'Statue_of_Liberty', gamePic: 'Statue_of_Liberty_(Civ6).png', realDesc: '美国纽约港的巨大铜像，象征自由。', gameDesc: '【历代核心】提供免费政策槽、移民/专家加成或直接给予外交胜利点数。' },
+            { type: 'world', id: 'oxford_university', name: '牛津大学', era: '工业时代', games: [5, 6, 7], lat: 51.754, lon: -1.254, wiki: 'University_of_Oxford', gamePic: 'Oxford_University_(Civ6).png', realDesc: '英国最古老的大学，学术的殿堂。', gameDesc: '【历代核心】提升所在城市巨额的科技百分比，并立刻免费赠送 1~2 项随机科技。' },
+            { type: 'world', id: 'hermitage', name: '冬宫', era: '工业时代', games: [5, 6, 7], lat: 59.939, lon: 30.314, wiki: 'Hermitage_Museum', gamePic: 'Hermitage_(Civ6).png', realDesc: '俄罗斯圣彼得堡的沙皇皇宫，现为著名博物馆。', gameDesc: '【历代核心】提供多个杰作槽位，并成倍增加所在城市的文化和旅游产出。' },
+            { type: 'world', id: 'angkor_wat', name: '吴哥窟', era: '中世纪', games: [5, 6, 7], lat: 13.412, lon: 103.866, wiki: 'Angkor_Wat', gamePic: 'Angkor_Wat_(Civ6).png', realDesc: '柬埔寨的巨型印度教及佛教神庙建筑群。', gameDesc: '【历代核心】提供大量信仰与全局人口住房/地块扩展速度加成。' },
+            { type: 'world', id: 'great_library', name: '大图书馆', era: '古典时代', games: [5, 6], lat: 31.208, lon: 29.909, wiki: 'Library_of_Alexandria', gamePic: 'Great_Library_(Civ6).png', realDesc: '托勒密埃及在亚历山大城建立的古代最大图书馆。', gameDesc: '【历代核心】前期最关键科技奇观，提供免费科技、大科学家点数及杰作槽。' },
+            { type: 'world', id: 'petra', name: '佩特拉城', era: '古典时代', games: [5, 6], lat: 30.328, lon: 35.444, wiki: 'Petra', gamePic: 'Petra_(Civ6).png', realDesc: '约旦南部岩石中雕凿出的玫瑰之城。', gameDesc: '【历代核心】化腐朽为神奇，为所有贫瘠的沙漠单元格提供食物、生产力和金币。' },
+            { type: 'world', id: 'forbidden_city', name: '紫禁城', era: '文艺复兴', games: [5, 6], lat: 39.916, lon: 116.397, wiki: 'Forbidden_City', gamePic: 'Forbidden_City_(Civ6).png', realDesc: '中国明清两代的皇家宫殿，宏伟壮观。', gameDesc: '【历代核心】增加全局政策槽位，或降低非首都城市的不满度，管理庞大帝国的利器。' },
+            { type: 'world', id: 'chichen_itza', name: '奇琴伊察', era: '中世纪', games: [5, 6], lat: 20.684, lon: -88.567, wiki: 'Chichen_Itza', gamePic: 'Chichen_Itza_(Civ6).png', realDesc: '墨西哥玛雅文明的伟大城市遗迹。', gameDesc: '【历代核心】极大增强雨林地块的文化与生产力，或延长黄金时代的持续时间。' },
+            { type: 'world', id: 'machu_picchu', name: '马丘比丘', era: '中世纪', games: [5, 6], lat: -13.163, lon: -72.545, wiki: 'Machu_Picchu', gamePic: 'Machu_Picchu_(Civ6).png', realDesc: '秘鲁安第斯山脉中的印加帝国遗迹。', gameDesc: '【历代核心】极大强化山脉地块的相邻加成，或大幅提升贸易路线的金币收益。' },
+            { type: 'world', id: 'taj_mahal', name: '泰姬陵', era: '文艺复兴', games: [5, 6], lat: 27.175, lon: 78.042, wiki: 'Taj_Mahal', gamePic: 'Taj_Mahal_(Civ6).png', realDesc: '印度莫卧儿建筑的巅峰大理石陵墓。', gameDesc: '【历代核心】建成后立刻开启黄金时代，或极大增加进入黄金时代所需的时代得分。' },
+            { type: 'world', id: 'notre_dame', name: '巴黎圣母院', era: '中世纪', games: [5, 7], lat: 48.852, lon: 2.349, wiki: 'Notre-Dame_de_Paris', gamePic: 'Notre_Dame_(Civ7).png', realDesc: '法国巴黎市中心著名的哥特式天主教大教堂。', gameDesc: '【文明5/7】提供极高额的全局快乐度（+10笑脸）与信仰，古典到中世纪最强维稳奇观。' },
+            { type: 'world', id: 'brandenburg_gate', name: '勃兰登堡门', era: '工业时代', games: [5, 7], lat: 52.516, lon: 13.377, wiki: 'Brandenburg_Gate', gamePic: 'Brandenburg_Gate_(Civ7).png', realDesc: '德国柏林的新古典主义纪念碑，和平与统一的象征。', gameDesc: '【文明5/7】诞生免费大将军，并在该城训练的军事单位出场即获得大量经验。' },
+            
+            // === 文明5 独占/特色 人造奇观 ===
+            { type: 'world', id: 'great_wall', name: '长城', era: '古典时代', games: [5], lat: 40.431, lon: 116.570, wiki: 'Great_Wall_of_China', gamePic: 'Great_Wall_(Civ5).png', realDesc: '中国古代的超大型军事防御工程。', gameDesc: '【文明5】敌军进入你的领土时移动力消耗翻倍，并提供免费城墙与伟人点数。' },
+            { type: 'world', id: 'hubble', name: '哈勃空间望远镜', era: '信息时代', games: [5], lat: 28.396, lon: -80.605, wiki: 'Hubble_Space_Telescope', gamePic: 'Hubble_Space_Telescope_(Civ5).png', realDesc: '在地球轨道上运行的光学望远镜，彻底改变了人类的宇宙观。', gameDesc: '【文明5】免费获得2个大科学家，极大加速航天器工厂建造，科技胜利的冲刺保障。' },
+            { type: 'world', id: 'pisa', name: '比萨斜塔', era: '文艺复兴', games: [5], lat: 43.722, lon: 10.396, wiki: 'Leaning_Tower_of_Pisa', gamePic: 'Leaning_Tower_of_Pisa_(Civ5).png', realDesc: '意大利比萨的独立钟楼，因倾斜而闻名。', gameDesc: '【文明5】所有城市伟人产生速度+25%，并可免费选择一位任意类型的伟人。' },
+            { type: 'world', id: 'neuschwanstein', name: '新天鹅堡', era: '工业时代', games: [5], lat: 47.557, lon: 10.749, wiki: 'Neuschwanstein_Castle', gamePic: 'Neuschwanstein_(Civ5).png', realDesc: '德国巴伐利亚的梦幻城堡，迪士尼城堡的原型。', gameDesc: '【文明5】为全帝国每座带有城堡的城市提供金币、文化和快乐度。' },
+            { type: 'world', id: 'louvre', name: '卢浮宫', era: '文艺复兴', games: [5], lat: 48.860, lon: 2.337, wiki: 'Louvre', gamePic: 'Louvre_(Civ5).png', realDesc: '法国巴黎的艺术殿堂，前身是法国王宫。', gameDesc: '【文明5】免费提供1名大艺术家，并拥有惊人的4个艺术品槽位用于文化胜利。' },
+            { type: 'world', id: 'kremlin', name: '克里姆林宫', era: '工业时代', games: [5], lat: 55.752, lon: 37.617, wiki: 'Moscow_Kremlin', gamePic: 'Kremlin_(Civ5).png', realDesc: '俄罗斯莫斯科的要塞建筑群，权力的象征。', gameDesc: '【文明5】在秩序意识形态下，装甲单位生产力大幅提升。' },
+            { type: 'world', id: 'porcelain', name: '大报恩寺琉璃塔', era: '文艺复兴', games: [5], lat: 32.016, lon: 118.777, wiki: 'Porcelain_Tower_of_Nanjing', gamePic: 'Porcelain_Tower_(Civ5).png', realDesc: '中国南京的宏伟宝塔，西方称之为瓷塔。', gameDesc: '【文明5】免费获得1名大科学家，并让签订科研协议获得的科研点数增加50%。' },
+
+            // === 文明6 独占/特色 人造奇观 (截取代表性) ===
+            { type: 'world', id: 'venetian_arsenal', name: '威尼斯军械库', era: '文艺复兴', games: [6], lat: 45.433, lon: 12.352, wiki: 'Venetian_Arsenal', gamePic: 'Venetian_Arsenal_(Civ6).png', realDesc: '威尼斯共和国的大型造船厂，流水线生产的雏形。', gameDesc: '【文明6】每次训练一个海军单位时，免费额外获得一个相同的单位。海战霸主。' },
+            { type: 'world', id: 'kilwa_kisiwani', name: '基尔瓦基斯瓦尼', era: '中世纪', games: [6], lat: -8.960, lon: 39.512, wiki: 'Kilwa_Kisiwani', gamePic: 'Kilwa_Kisiwani_(Civ6).png', realDesc: '坦桑尼亚沿海的斯瓦希里贸易城市废墟。', gameDesc: '【文明6】根据您宗主国的城邦类型，为全帝国提供极高比例的产出加成。' },
+            { type: 'world', id: 'ruhr_valley', name: '鲁尔谷', era: '工业时代', games: [6], lat: 51.466, lon: 7.000, wiki: 'Ruhr', gamePic: 'Ruhr_Valley_(Civ6).png', realDesc: '德国重要的工业区，欧洲的重工业心脏。', gameDesc: '【文明6】该城市+20%生产力，且每个矿山和采石场额外+1生产力。' },
+
+            // === 文明7 独占/特色 人造奇观 ===
+            { type: 'world', id: 'weiyang', name: '未央宫', era: '古典时代', games: [7], lat: 34.300, lon: 108.868, wiki: 'Weiyang_Palace', gamePic: 'Weiyang_Palace_(Civ7).png', realDesc: '中国汉朝的权力中心，是世界上规模最大的宫殿群之一。', gameDesc: '【文明7】提供极高额的外交影响力 (Influence)。' },
+            { type: 'world', id: 'great_stele', name: '大石碑', era: '远古时代', games: [7], lat: 14.131, lon: 38.719, wiki: 'Obelisk_of_Axum', gamePic: 'Great_Stele_(Civ7).png', realDesc: '阿克苏姆王国的方尖碑，象征着古代埃塞俄比亚的文明。', gameDesc: '【文明7】每当在此城市完成一个奇观时，每个时代都能获得大量金币奖励。' },
+            { type: 'world', id: 'sanchi', name: '桑吉大佛塔', era: '古典时代', games: [7], lat: 23.480, lon: 77.739, wiki: 'Sanchi', gamePic: 'Sanchi_Stupa_(Civ7).png', realDesc: '印度孔雀王朝阿育王所建的佛教舍利塔。', gameDesc: '【文明7】提供快乐度，并且城市中多余的快乐度会转化为文化值。' },
+            { type: 'world', id: 'house_of_wisdom', name: '智慧之家', era: '中世纪', games: [7], lat: 33.325, lon: 44.422, wiki: 'House_of_Wisdom', gamePic: 'House_of_Wisdom_(Civ7).png', realDesc: '阿拔斯王朝在巴格达建立的学术中心，保存了大量古希腊文献。', gameDesc: '【文明7】提供科学值和遗物，且杰作能额外产出科学值。' },
+            { type: 'world', id: 'mundo_perdido', name: '失落的世界', era: '古典时代', games: [7], lat: 17.222, lon: -89.623, wiki: 'Mundo_Perdido,_Tikal', gamePic: 'Mundo_Perdido_(Civ7).png', realDesc: '危地马拉蒂卡尔的玛雅文明天文与宗教建筑群。', gameDesc: '【文明7】在热带地形提供额外的快乐度与科学值加成。' },
+
+            // ====== 自然奇观 (Natural Wonders) ======
+            
+            // 历代共享自然奇观
+            { type: 'natural', id: 'great_barrier_reef', name: '大堡礁', era: '自然', games: [5, 6, 7], lat: -18.287, lon: 147.699, wiki: 'Great_Barrier_Reef', gamePic: 'Great_Barrier_Reef_(Civ6).png', realDesc: '世界上最大的珊瑚礁群，位于澳大利亚东北海岸。', gameDesc: '【历代核心】多占地块的海洋奇观，提供大量食物、科学值，并增加临近海域产出。' },
+            { type: 'natural', id: 'kilimanjaro', name: '乞力马扎罗山', era: '自然', games: [5, 6, 7], lat: -3.067, lon: 37.355, wiki: 'Mount_Kilimanjaro', gamePic: 'Mount_Kilimanjaro_(Civ6).png', realDesc: '非洲最高峰，赤道上的雪山，著名的活火山。', gameDesc: '【历代核心】提供食物与文化。在 5 代中路过的部队获得“高山训练”移动晋升。' },
+            { type: 'natural', id: 'uluru', name: '乌鲁鲁', era: '自然', games: [5, 6, 7], lat: -25.344, lon: 131.036, wiki: 'Uluru', gamePic: 'Uluru_(Civ6).png', realDesc: '澳大利亚红土中心的巨大单体岩石，土著人的神山。', gameDesc: '【历代核心】在干旱的沙漠中拔地而起，提供巨量信仰与文化值、快乐度。' },
+            { type: 'natural', id: 'mt_fuji', name: '富士山', era: '自然', games: [5, 7], lat: 35.360, lon: 138.727, wiki: 'Mount_Fuji', gamePic: 'Mount_Fuji_(Civ7).png', realDesc: '日本著名的活火山，完美的锥形山体是文化象征。', gameDesc: '【文明5/7】提供金币、文化与快乐度，宗教与美学的完美结合。' },
+            { type: 'natural', id: 'everest', name: '珠穆朗玛峰', era: '自然', games: [6, 7], lat: 27.988, lon: 86.925, wiki: 'Mount_Everest', gamePic: 'Mount_Everest_(Civ6).png', realDesc: '地球第一高峰，位于喜马拉雅山脉。', gameDesc: '【文明6/7】提供信仰值，临近单位在丘陵移动时不消耗额外移动力。' },
+
+            // 文明5 特色自然奇观
+            { type: 'natural', id: 'fountain_youth', name: '青春之泉', era: '自然', games: [5], lat: 29.894, lon: -81.314, wiki: 'Fountain_of_Youth', gamePic: 'Fountain_of_Youth_(Civ5).png', realDesc: '传说中能让人返老还童的泉水，大航海时代探险家们的追求（坐标标于佛罗里达）。', gameDesc: '【文明5】提供极高的+10笑脸，且路过的军事单位生命恢复速度永久翻倍！' },
+            { type: 'natural', id: 'el_dorado', name: '黄金国', era: '自然', games: [5], lat: 4.598, lon: -73.964, wiki: 'Lake_Guatavita', gamePic: 'El_Dorado_(Civ5).png', realDesc: '南美洲探险家梦寐以求的黄金城（坐标标于瓜塔维塔湖）。', gameDesc: '【文明5】首个发现它的文明会立刻获得 500 金币的巨额初始资金。' },
+            { type: 'natural', id: 'solomons_mines', name: '所罗门王的宝藏', era: '自然', games: [5], lat: 29.771, lon: 34.973, wiki: 'Timna_Valley', gamePic: 'King_Solomon%27s_Mines_(Civ5).png', realDesc: '传说中蕴藏无尽财富的古代矿区（标于亭纳山谷）。', gameDesc: '【文明5】该地块直接提供不可思议的 +6 生产力。' },
+            { type: 'natural', id: 'krakatoa', name: '喀拉喀托火山', era: '自然', games: [5], lat: -6.102, lon: 105.423, wiki: 'Krakatoa', gamePic: 'Krakatoa_(Civ5).png', realDesc: '印尼著名的火山，1883年的大爆发震撼了整个世界。', gameDesc: '【文明5】提供 5 点科学值，是海岛文明跃进科技的关键。' },
+            { type: 'natural', id: 'lake_victoria', name: '维多利亚湖', era: '自然', games: [5], lat: -1.000, lon: 33.000, wiki: 'Lake_Victoria', gamePic: 'Lake_Victoria_(Civ5).png', realDesc: '非洲最大的淡水湖，尼罗河的源头之一。', gameDesc: '【文明5】提供惊人的 +6 食物产出，人口爆炸的催化剂。' },
+            
+            // 文明6 特色自然奇观
+            { type: 'natural', id: 'bermuda_triangle', name: '百慕大三角', era: '自然', games: [6, 7], lat: 25.000, lon: -71.000, wiki: 'Bermuda_Triangle', gamePic: 'Bermuda_Triangle_(Civ6).png', realDesc: '北大西洋中的神秘海域，以飞机和船只离奇失踪而闻名。', gameDesc: '【文明6/7】单位进入时获得永久+1移动力并被随机传送到大洋深处，提供极高科技值。' },
+            { type: 'natural', id: 'paititi', name: '帕提提', era: '自然', games: [6], lat: -12.500, lon: -71.500, wiki: 'Paititi', gamePic: 'Paititi_(Civ6).png', realDesc: '南美传说中的印加避难所和黄金城。', gameDesc: '【文明6】提供夸张的文化与金币加成，周边商业中心金币产出直接起飞。' },
+            { type: 'natural', id: 'dead_sea', name: '死海', era: '自然', games: [6], lat: 31.500, lon: 35.500, wiki: 'Dead_Sea', gamePic: 'Dead_Sea_(Civ6).png', realDesc: '位于约旦和以色列边境，地球上海拔最低且盐度极高的湖泊。', gameDesc: '【文明6】提供信仰与文化。残血单位只要在其旁边驻扎一回合即可瞬间满血。' },
+            
+            // 文明7 特色自然奇观
+            { type: 'natural', id: 'grand_canyon', name: '大峡谷', era: '自然', games: [7], lat: 36.106, lon: -112.112, wiki: 'Grand_Canyon', gamePic: 'Grand_Canyon_(Civ7).png', realDesc: '美国科罗拉多河切割出的巨大峡谷，地球的地质宝库。', gameDesc: '【文明7】占据4格菱形，提供大量快乐度、文化，并为该城市所有平原提供科研。' },
+            { type: 'natural', id: 'hoerikwaggo', name: '桌山', era: '自然', games: [7], lat: -33.962, lon: 18.409, wiki: 'Table_Mountain', gamePic: 'Hoerikwaggo_(Civ7).png', realDesc: '南非开普敦的地标，形如巨大桌面的平顶山。', gameDesc: '【文明7】提供食物与文化，并为其周围的 Quarter 街区提供额外快乐度。' },
+            { type: 'natural', id: 'iguazu', name: '伊瓜苏瀑布', era: '自然', games: [7], lat: -25.695, lon: -54.436, wiki: 'Iguazu_Falls', gamePic: 'Iguazu_Falls_(Civ7).png', realDesc: '阿根廷与巴西边界的世界最大瀑布群。', gameDesc: '【文明7】提供大量淡水、食物与快乐度，相邻区划获得+2生产力。' },
+            { type: 'natural', id: 'machapuchare', name: '鱼尾峰', era: '自然', games: [7], lat: 28.495, lon: 83.948, wiki: 'Machapuchare', gamePic: 'Machapuchare_(Civ7).png', realDesc: '尼泊尔境内的神圣山峰，因其形状似鱼尾而得名。', gameDesc: '【文明7】提供生产力与文化，让整个定居点的粗糙与山地地形获得快乐度。' },
+            { type: 'natural', id: 'vinicunca', name: '彩虹山', era: '自然', games: [7], lat: -13.870, lon: -71.303, wiki: 'Vinicunca', gamePic: 'Vinicunca_(Civ7).png', realDesc: '秘鲁安第斯山脉中的地质奇观，因矿物沉积呈现七彩纹理。', gameDesc: '【文明7】十字路口DLC扩展包内容，提供非凡的视觉与独特的产出。' }
+        ];
+
+        // --- 全局变量与控制逻辑 ---
+        let scene, camera, renderer, controls, earthGroup;
+        const EARTH_RADIUS = 5;
+        let markers = [];
+        let textSprites = [];
+        let raycaster, mouse;
+        let isAnimatingCamera = false;
+        let targetCameraPos = new THREE.Vector3();
+        let isWonderSelected = false;
+
+        // --- UI 渲染与列表逻辑 ---
+        function initUI() {
+            const listContainer = document.getElementById('wonder-list');
+            
+            wondersData.sort((a, b) => {
+                if(a.type !== b.type) return a.type.localeCompare(b.type); // 世界奇观在前，自然奇观在后
+                return a.name.localeCompare(b.name);
+            }).forEach((wonder) => {
+                const item = document.createElement('div');
+                const isNatural = wonder.type === 'natural';
+                item.className = 'p-3 rounded-lg border border-transparent civ-hover cursor-pointer transition-colors duration-200';
+                
+                // 动态生成版本 Tag 徽章
+                const gameTags = wonder.games.map(g => {
+                    let cls = g === 5 ? 'bg-blue-900/60 text-blue-300 border-blue-700/50' : 
+                             (g === 6 ? 'bg-purple-900/60 text-purple-300 border-purple-700/50' : 'bg-red-900/60 text-red-300 border-red-700/50');
+                    let txt = g === 5 ? 'V' : (g === 6 ? 'VI' : 'VII');
+                    return `<span class="text-[9px] px-1 rounded mx-[1px] border ${cls}">${txt}</span>`;
+                }).join('');
+
+                item.innerHTML = `
+                    <div class="flex justify-between items-center">
+                        <div class="flex flex-col">
+                            <span class="font-bold ${isNatural ? 'civ-green' : 'text-gray-200'}">${wonder.name}</span>
+                            <div class="flex mt-1">${gameTags}</div>
+                        </div>
+                        <span class="text-[10px] ${isNatural ? 'text-green-600 bg-green-900/30' : 'text-yellow-600 bg-yellow-900/30'} px-2 py-1 rounded uppercase whitespace-nowrap ml-2">
+                            ${isNatural ? '自然奇观' : wonder.era}
+                        </span>
+                    </div>
+                `;
+                item.onclick = () => focusOnWonder(wonder);
+                listContainer.appendChild(item);
+            });
+        }
+
+        // 高级 Fallback 渲染器 (应对防盗链或图库缺失)
+        function getFallbackImage(title, subtitle, isGame) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 400; canvas.height = 300;
+            const ctx = canvas.getContext('2d');
+            const gradient = ctx.createLinearGradient(0, 0, 400, 300);
+            if (isGame) { gradient.addColorStop(0, '#1a1a1a'); gradient.addColorStop(1, '#2d2d2d'); }
+            else { gradient.addColorStop(0, '#1e293b'); gradient.addColorStop(1, '#0f172a'); }
+            ctx.fillStyle = gradient; ctx.fillRect(0, 0, 400, 300);
+            ctx.strokeStyle = isGame ? '#facc15' : '#475569';
+            ctx.lineWidth = 4; ctx.strokeRect(2, 2, 396, 296);
+            ctx.fillStyle = isGame ? '#facc15' : '#f8fafc';
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.font = 'bold 24px "Segoe UI", sans-serif'; ctx.fillText(title, 200, 130);
+            ctx.font = '14px "Segoe UI", sans-serif'; ctx.fillStyle = '#94a3b8';
+            ctx.fillText(subtitle, 200, 170);
+            return canvas.toDataURL();
+        }
+
+        function showDetailPanel(wonder) {
+            const panel = document.getElementById('detail-panel');
+            panel.classList.remove('hidden');
+            isWonderSelected = true;
+            updateCameraOffset(true);
+
+            const isNatural = wonder.type === 'natural';
+            document.getElementById('detail-type-era').innerText = `${isNatural ? '自然奇观' : '人造奇观'} · ${wonder.era}`;
+            document.getElementById('detail-type-era').className = `text-sm font-bold ${isNatural ? 'text-green-400' : 'text-yellow-500'}`;
+            
+            // 渲染面板内部的世代 Tag
+            document.getElementById('detail-games').innerHTML = wonder.games.map(g => {
+                let cls = g === 5 ? 'bg-blue-900/60 text-blue-300 border-blue-700/50' : 
+                         (g === 6 ? 'bg-purple-900/60 text-purple-300 border-purple-700/50' : 'bg-red-900/60 text-red-300 border-red-700/50');
+                let txt = g === 5 ? 'Civ 5' : (g === 6 ? 'Civ 6' : 'Civ 7');
+                return `<span class="text-xs px-2 py-0.5 rounded mr-1 border ${cls}">${txt}</span>`;
+            }).join('');
+
+            document.getElementById('detail-name').innerText = wonder.name;
+            document.getElementById('detail-coords').innerText = `${wonder.lat > 0 ? 'N' : 'S'} ${Math.abs(wonder.lat).toFixed(2)}°, ${wonder.lon > 0 ? 'E' : 'W'} ${Math.abs(wonder.lon).toFixed(2)}°`;
+            
+            document.getElementById('game-img-label').innerText = isNatural ? "游戏内地貌" : "游戏内模型";
+            document.getElementById('game-desc-title').innerHTML = `<span class="w-1.5 h-4 ${isNatural ? 'bg-green-500' : 'bg-yellow-500'} rounded-full mr-2"></span> 世代机制解析`;
+
+            const realImgEl = document.getElementById('real-img');
+            const gameImgEl = document.getElementById('game-img');
+            
+            // 每次打开面板前重置图片滤镜
+            gameImgEl.style.filter = 'none';
+            
+            realImgEl.src = getFallbackImage(wonder.name, '正在连接维基百科...', false);
+            gameImgEl.src = getFallbackImage(wonder.name, '正在载入设定图...', true);
+
+            // Fetch 机制升级：通过闭包传递获取到的真实历史图片地址，以供游戏图片拉取失败时做“降级滤镜渲染”
+            fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(wonder.wiki)}`)
+                .then(res => res.json())
+                .then(data => { 
+                    const wikiUrl = data.thumbnail ? data.thumbnail.source : null;
+                    if (wikiUrl) {
+                        realImgEl.src = wikiUrl;
+                    } else {
+                        realImgEl.src = getFallbackImage(wonder.name, '无词条主图', false);
+                    }
+                    // 在获取到维基图后，再去请求 Fandom 游戏图（并将 wikiUrl 传给它作为备胎）
+                    fetchGameImage(wikiUrl);
+                })
+                .catch(() => { 
+                    realImgEl.src = getFallbackImage(wonder.name, '网络超时', false); 
+                    fetchGameImage(null);
+                });
+
+            // 获取游戏原画的核心方法，内置降级渲染机制
+            function fetchGameImage(fallbackWikiUrl) {
+                fetch(`https://civilization.fandom.com/api.php?action=query&titles=File:${encodeURIComponent(wonder.gamePic)}&prop=imageinfo&iiprop=url&format=json&origin=*`)
+                    .then(res => res.json())
+                    .then(data => {
+                        const pages = data.query.pages;
+                        const pageId = Object.keys(pages)[0];
+                        if (pageId !== "-1" && pages[pageId].imageinfo) {
+                            gameImgEl.src = pages[pageId].imageinfo[0].url;
+                        } else {
+                            applyConceptArtFallback(fallbackWikiUrl);
+                        }
+                    })
+                    .catch(() => { 
+                        applyConceptArtFallback(fallbackWikiUrl); 
+                    });
+            }
+
+            // 当官方图库缺失时（特别是新出的文明7奇观），自动复用历史照片，并施加“文明复古风”CSS滤镜
+            function applyConceptArtFallback(wikiUrl) {
+                if (wikiUrl) {
+                    gameImgEl.src = wikiUrl;
+                    // 应用类似文明游戏质感的暖色调/复古滤镜
+                    gameImgEl.style.filter = 'sepia(0.55) hue-rotate(345deg) saturate(1.4) contrast(1.15) brightness(0.95)';
+                    document.getElementById('game-img-label').innerText = "概念设定 (由AI降级渲染)";
+                } else {
+                    gameImgEl.src = getFallbackImage(wonder.name, '图库暂未收录原画', true);
+                }
+            }
+            
+            document.getElementById('detail-real-desc').innerText = wonder.realDesc;
+            document.getElementById('detail-game-desc').innerText = wonder.gameDesc;
+        }
+
+        function closeDetailPanel() {
+            document.getElementById('detail-panel').classList.add('hidden');
+            isWonderSelected = false;
+            updateCameraOffset(false);
+        }
+
+        // --- 3D 渲染逻辑 ---
+        function initThreeJS() {
+            const container = document.getElementById('canvas-container');
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x020208);
+            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 0, 15);
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            container.appendChild(renderer.domElement);
+
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.enablePan = false;
+            controls.minDistance = 6;
+            controls.maxDistance = 18;
+
+            scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+            const sun = new THREE.DirectionalLight(0xffffff, 0.8);
+            sun.position.set(10, 10, 10);
+            scene.add(sun);
+
+            createEarth();
+            addMarkers();
+
+            raycaster = new THREE.Raycaster();
+            mouse = new THREE.Vector2();
+            window.addEventListener('resize', onResize);
+            renderer.domElement.addEventListener('click', onClick);
+        }
+
+        function createEarth() {
+            earthGroup = new THREE.Group();
+            scene.add(earthGroup);
+            const loader = new THREE.TextureLoader();
+            // 真实地理卫星贴图
+            const earthTexture = loader.load('https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg');
+            const earthMesh = new THREE.Mesh(
+                new THREE.SphereGeometry(EARTH_RADIUS, 64, 64),
+                new THREE.MeshPhongMaterial({ map: earthTexture, shininess: 10 })
+            );
+            earthGroup.add(earthMesh);
+            
+            const glow = new THREE.Mesh(
+                new THREE.SphereGeometry(EARTH_RADIUS + 0.1, 64, 64),
+                new THREE.MeshBasicMaterial({ color: 0x4f86f7, transparent: true, opacity: 0.1, side: THREE.BackSide })
+            );
+            earthGroup.add(glow);
+        }
+
+        function latLongToPos(lat, lon, radius) {
+            const phi = (90 - lat) * (Math.PI / 180);
+            const theta = (lon + 180) * (Math.PI / 180);
+            return new THREE.Vector3(
+                -(radius * Math.sin(phi) * Math.cos(theta)),
+                (radius * Math.cos(phi)),
+                (radius * Math.sin(phi) * Math.sin(theta))
+            );
+        }
+
+        function createTextSprite(text, color) {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            ctx.font = 'bold 36px "Segoe UI"';
+            const w = ctx.measureText(text).width + 20;
+            canvas.width = w; canvas.height = 50;
+            ctx.font = 'bold 36px "Segoe UI"';
+            ctx.textAlign = "center"; ctx.textBaseline = "middle";
+            ctx.shadowColor = "black"; ctx.shadowBlur = 5;
+            ctx.fillStyle = color;
+            ctx.fillText(text, w/2, 25);
+            const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canvas), transparent: true }));
+            // 因为奇观数量大增，文字默认缩小一点，防止遮挡
+            sprite.scale.set(w * 0.0022, 50 * 0.0022, 1);
+            return sprite;
+        }
+
+        function addMarkers() {
+            wondersData.forEach(w => {
+                const pos = latLongToPos(w.lat, w.lon, EARTH_RADIUS);
+                // 自然奇观绿色，人造奇观金色
+                const color = w.type === 'natural' ? 0x4ade80 : 0xfacc15;
+                
+                const dot = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.04, 16, 16),
+                    new THREE.MeshBasicMaterial({ color: color })
+                );
+                dot.position.copy(pos);
+                dot.userData = w;
+                earthGroup.add(dot);
+                markers.push(dot);
+
+                const ring = new THREE.Mesh(
+                    new THREE.RingGeometry(0.06, 0.07, 16),
+                    new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.5, side: THREE.DoubleSide })
+                );
+                ring.position.copy(pos);
+                ring.lookAt(0,0,0);
+                earthGroup.add(ring);
+
+                const label = createTextSprite(w.name, w.type === 'natural' ? '#4ade80' : '#fde047');
+                label.position.copy(pos.clone().normalize().multiplyScalar(EARTH_RADIUS * 1.03));
+                earthGroup.add(label);
+                textSprites.push(label);
+            });
+        }
+
+        function focusOnWonder(w) {
+            const marker = markers.find(m => m.userData.id === w.id);
+            const worldPos = new THREE.Vector3();
+            marker.getWorldPosition(worldPos);
+            targetCameraPos.copy(worldPos).normalize().multiplyScalar(EARTH_RADIUS * 2.2);
+            isAnimatingCamera = true;
+            showDetailPanel(w);
+        }
+
+        function updateCameraOffset(open) {
+            if (open) { camera.setViewOffset(window.innerWidth, window.innerHeight, 90, 0, window.innerWidth, window.innerHeight); }
+            else { camera.clearViewOffset(); }
+            camera.updateProjectionMatrix();
+        }
+
+        function onClick(e) {
+            mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(markers);
+            if (intersects.length > 0) focusOnWonder(intersects[0].object.userData);
+        }
+
+        function onResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            updateCameraOffset(isWonderSelected);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            if (isAnimatingCamera) {
+                camera.position.lerp(targetCameraPos, 0.05);
+                camera.lookAt(0, 0, 0);
+                if (camera.position.distanceTo(targetCameraPos) < 0.05) isAnimatingCamera = false;
+            } else { controls.update(); }
+            if (!isWonderSelected) earthGroup.rotation.y += 0.0005;
+            renderer.render(scene, camera);
+        }
+
+        window.onload = () => { initUI(); initThreeJS(); animate(); };
+    </script>
+</body>
+</html>
