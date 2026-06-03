@@ -3,12 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="referrer" content="no-referrer">
     <title>文明历代奇观档案馆 | Civilization Wonders Explorer</title>
-    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Three.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <!-- OrbitControls -->
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     <style>
         body { margin: 0; overflow: hidden; background-color: #050510; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
@@ -37,13 +35,10 @@
 </head>
 <body class="text-gray-200">
 
-    <!-- 3D 场景容器 -->
     <div id="canvas-container"></div>
 
-    <!-- UI 层 -->
     <div class="relative z-10 flex h-screen pointer-events-none">
         
-        <!-- 左侧：奇观列表 -->
         <div class="w-80 h-full flex flex-col p-4 pointer-events-auto">
             <div class="glass-panel rounded-xl flex-1 flex flex-col overflow-hidden">
                 <div class="p-4 border-b civ-border bg-slate-900/50">
@@ -51,18 +46,14 @@
                     <p class="text-[10px] text-center text-gray-400 mt-1 uppercase tracking-widest">Civilization V / VI / VII</p>
                 </div>
                 <div id="wonder-list" class="flex-1 overflow-y-auto p-2 space-y-2">
-                    <!-- 列表项由 JS 动态生成 -->
-                </div>
+                    </div>
             </div>
         </div>
 
-        <!-- 中间空白 -->
         <div class="flex-1"></div>
 
-        <!-- 右侧：详情对比面板 -->
         <div id="detail-panel" class="w-[500px] h-full p-4 pointer-events-auto hidden">
             <div class="glass-panel rounded-xl h-full flex flex-col overflow-hidden relative slide-in">
-                <!-- 关闭按钮 -->
                 <button onclick="closeDetailPanel()" class="absolute top-4 right-4 text-gray-400 hover:text-white z-20">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                 </button>
@@ -80,19 +71,17 @@
                 </div>
 
                 <div class="flex-1 overflow-y-auto">
-                    <!-- 图片对比区 -->
                     <div class="p-4 grid grid-cols-2 gap-4 border-b border-gray-700/50">
                         <div class="flex flex-col">
                             <span class="text-xs text-center mb-2 text-gray-400 tracking-widest">真实面貌</span>
-                            <img id="real-img" src="" alt="Real World" class="rounded-lg object-cover h-32 w-full shadow-lg border border-gray-600 bg-slate-800">
+                            <img id="real-img" src="" alt="Real World" referrerpolicy="no-referrer" class="rounded-lg object-cover h-32 w-full shadow-lg border border-gray-600 bg-slate-800">
                         </div>
                         <div class="flex flex-col">
                             <span class="text-xs text-center mb-2 civ-gold tracking-widest" id="game-img-label">游戏设定</span>
-                            <img id="game-img" src="" alt="Game Model" class="rounded-lg object-cover h-32 w-full shadow-lg border civ-border bg-slate-800">
+                            <img id="game-img" src="" alt="Game Model" referrerpolicy="no-referrer" class="rounded-lg object-cover h-32 w-full shadow-lg border civ-border bg-slate-800">
                         </div>
                     </div>
 
-                    <!-- 文本解析区 -->
                     <div class="p-6 space-y-6">
                         <div>
                             <h3 class="text-lg font-semibold text-white mb-2 flex items-center">
