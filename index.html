@@ -78,7 +78,7 @@
                         </div>
                         <div class="flex flex-col">
                             <span class="text-xs text-center mb-2 civ-gold tracking-widest" id="game-img-label">游戏设定</span>
-                            <img id="game-img" src="" alt="Game Model" referrerpolicy="no-referrer" class="rounded-lg object-cover h-32 w-full shadow-lg border civ-border bg-slate-800">
+                            <img id="game-img" src="" alt="Game Model" crossorigin="anonymous" referrerpolicy="no-referrer" class="rounded-lg object-cover h-32 w-full shadow-lg border civ-border bg-slate-800">
                         </div>
                     </div>
 
@@ -280,6 +280,11 @@
                 .then(data => { 
                     const wikiUrl = data.thumbnail ? data.thumbnail.source : null;
                     if (wikiUrl) {
+                        // 增加 onerror：防止维基百科的图片也被个别网络环境拦截
+                        realImgEl.onerror = () => {
+                            realImgEl.onerror = null;
+                            realImgEl.src = getFallbackImage(wonder.name, '维基图源被拦截', false);
+                        };
                         realImgEl.src = wikiUrl;
                     } else {
                         realImgEl.src = getFallbackImage(wonder.name, '无词条主图', false);
@@ -292,15 +297,27 @@
                     fetchGameImage(null);
                 });
 
-            // 获取游戏原画的核心方法，内置降级渲染机制
+            // 获取游戏原画的核心方法，内置代理转发与降级渲染机制
             function fetchGameImage(fallbackWikiUrl) {
                 fetch(`https://civilization.fandom.com/api.php?action=query&titles=File:${encodeURIComponent(wonder.gamePic)}&prop=imageinfo&iiprop=url&format=json&origin=*`)
                     .then(res => res.json())
                     .then(data => {
                         const pages = data.query.pages;
                         const pageId = Object.keys(pages)[0];
-                        if (pageId !== "-1" && pages[pageId].imageinfo) {
-                            gameImgEl.src = pages[pageId].imageinfo[0].url;
+                        if (pageId !== "-1" && pages[pageId].imageinfo && pages[pageId].imageinfo[0].url) {
+                            const rawUrl = pages[pageId].imageinfo[0].url;
+                            
+                            // 核心修复：就算官方给了地址，浏览器直接访问依然会被 CDN 切断
+                            // 因此我们借用 AllOrigins 跨域代理服务，让服务器替我们下载图片流
+                            const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(rawUrl)}`;
+                            
+                            gameImgEl.onerror = () => {
+                                gameImgEl.onerror = null; // 清除自身，防止死循环
+                                applyConceptArtFallback(fallbackWikiUrl);
+                            };
+                            
+                            // 请求代理转发的地址
+                            gameImgEl.src = proxyUrl;
                         } else {
                             applyConceptArtFallback(fallbackWikiUrl);
                         }
@@ -310,15 +327,23 @@
                     });
             }
 
-            // 当官方图库缺失时（特别是新出的文明7奇观），自动复用历史照片，并施加“文明复古风”CSS滤镜
+            // 当官方图库缺失或 CDN 强行拦截时，自动复用历史照片，并施加“文明复古风”CSS滤镜
             function applyConceptArtFallback(wikiUrl) {
+                // 再次添加 onerror，以防万一连备用图也无法加载
+                gameImgEl.onerror = () => {
+                    gameImgEl.onerror = null;
+                    gameImgEl.style.filter = 'none';
+                    gameImgEl.src = getFallbackImage(wonder.name, '图库无法访问', true);
+                };
+                
                 if (wikiUrl) {
                     gameImgEl.src = wikiUrl;
                     // 应用类似文明游戏质感的暖色调/复古滤镜
                     gameImgEl.style.filter = 'sepia(0.55) hue-rotate(345deg) saturate(1.4) contrast(1.15) brightness(0.95)';
                     document.getElementById('game-img-label').innerText = "概念设定 (由AI降级渲染)";
                 } else {
-                    gameImgEl.src = getFallbackImage(wonder.name, '图库暂未收录原画', true);
+                    gameImgEl.style.filter = 'none';
+                    gameImgEl.src = getFallbackImage(wonder.name, '图库无法访问', true);
                 }
             }
             
